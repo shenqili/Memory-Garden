@@ -1,0 +1,7 @@
+{
+  "name": "Penderecki Particle Garden",
+  "description": "An interactive WebGL particle system inspired by Ogród Pendereckiego, featuring image-to-particle conversion, curl noise flow, and mouse repulsion.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
