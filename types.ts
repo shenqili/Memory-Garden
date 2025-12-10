@@ -3,7 +3,8 @@ import * as THREE from 'three';
 export interface ParticleData {
   positions: Float32Array;
   colors: Float32Array;
-  uvs: Float32Array;
+  uvs: Float32Array; // 这里存储的是初始的 3D 位置 (xyz)
+  realUvs: Float32Array; // ✨ 新增：这里存储真正的纹理坐标 (uv)
   count: number;
   id?: string;
 }
@@ -32,7 +33,7 @@ export interface Uniforms {
   uMouseStrength: { value: number };
   
   // Audio Reactive
-  uAudioHigh: { value: number }; // New: High frequency volume (0.0 to 1.0)
+  uAudioHigh: { value: number }; 
 }
 
 export type AppPhase = 'IDLE' | 'CHATTING' | 'GENERATING' | 'GALLERY';

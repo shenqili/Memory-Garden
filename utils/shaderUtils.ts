@@ -1,4 +1,3 @@
-
 // Simplex 3D Noise function (standard implementation)
 const simplexNoise = `
 vec4 permute(vec4 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
@@ -127,10 +126,12 @@ uniform float uAudioHigh; // Audio Reactivity
 
 attribute vec3 color;
 attribute vec3 initialPosition;
+// ✨ 新增: Shader 自动获取 UV
+varying vec2 vUv; 
 
 varying vec3 vColor;
-varying vec2 vUv;
 varying float vDepth;
+varying float vEdgeIntensity; // 传递边缘强度给 fragment shader
 
 ${curlNoise}
 
@@ -140,50 +141,82 @@ float luminance(vec3 rgb) {
 
 void main() {
   vUv = uv;
-  vColor = color;
   
-  vec3 pos = initialPosition;
-  float lum = luminance(color);
+  // --- 1. Organic Masking Logic (记忆碎片边缘) ---
+  vec2 center = vec2(0.5);
+  float dist = distance(uv, center);
+  
+  // 使用 Noise 生成动态的、不规则的边缘
+  float edgeNoise = snoise(vec3(uv * 3.5, uTime * 0.15)) * 0.15;
+  // 基础半径 + 噪点偏移 = 不规则轮廓
+  float maskRadius = 0.38 + edgeNoise;
+  
+  // 计算裁剪遮罩 (Alpha Mask)
+  // smoothstep 0.08 用于创建柔和的边缘过渡
+  float alphaMask = 1.0 - smoothstep(maskRadius, maskRadius + 0.08, dist);
+  
+  // 如果完全被遮挡，移出屏幕
+  if (alphaMask < 0.01) {
+    gl_Position = vec4(10.0, 10.0, 10.0, 1.0); 
+    return;
+  }
 
-  // 1. Z-Depth Relief ("Terrain" effect)
+  // --- 2. Color Processing (边缘发光) ---
+  // 计算发光强度：越靠近边缘越强
+  float edgeGlow = smoothstep(maskRadius, maskRadius + 0.08, dist);
+  vEdgeIntensity = edgeGlow; 
+
+  // 边缘处混合白色 (Whitewash effect)
+  // 0.7 是混合强度，越靠近边缘，粒子越接近纯白
+  vec3 finalColor = mix(color, vec3(1.0, 1.0, 1.0), edgeGlow * 0.7);
+  vColor = finalColor;
+
+  // --- 3. Position & Physics ---
+  vec3 pos = initialPosition;
+  float lum = luminance(finalColor);
+
+  // Z-Depth Relief
   pos.z += lum * uDepthStrength;
 
-  // 2. Depth Wave
+  // Depth Wave
   pos.z += sin(pos.x * 0.5 + uTime * 0.5) * uDepthWave;
 
-  // 3. Audio Reactivity (BOOM effect)
-  // Higher audio level pushes bright particles further out
+  // Audio Reactivity (BOOM effect)
   pos.z += uAudioHigh * lum * 3.0;
   
-  // 4. Dispersion (Transition & Scatter)
+  // Dispersion (Transition)
   float staticNoise = snoise(pos * 5.0 + uTime * 0.1);
   vec3 scatterDir = vec3(staticNoise, snoise(pos * 5.5), snoise(pos * 6.0));
   pos += scatterDir * uDispersion;
 
-  // 5. Curl Noise Flow
+  // Curl Noise Flow
+  // 边缘粒子更不稳定，更容易飘动
+  float edgeInstability = 1.0 + edgeGlow * 2.5; 
+  
   float flowTime = uTime * uFlowSpeed;
   vec3 noisePos = pos * 0.5 + vec3(0.0, 0.0, flowTime);
   vec3 curlVel = curl(noisePos.x, noisePos.y, noisePos.z);
-  // Audio makes flow faster/more chaotic briefly?
-  pos += curlVel * (uFlowAmplitude + uAudioHigh * 0.5);
+  pos += curlVel * (uFlowAmplitude * edgeInstability + uAudioHigh * 0.5);
 
-  // 6. Mouse Repulsion
-  float dist = distance(pos.xy, uMouse.xy);
-  if(dist < uHoverRadius) {
+  // Mouse Repulsion
+  float mouseDist = distance(pos.xy, uMouse.xy);
+  if(mouseDist < uHoverRadius) {
     vec3 dir = normalize(pos - vec3(uMouse.xy, pos.z));
-    float force = (uHoverRadius - dist) / uHoverRadius;
+    float force = (uHoverRadius - mouseDist) / uHoverRadius;
     force = smoothstep(0.0, 1.0, force); 
     force = pow(force, 2.0); 
     pos += dir * force * uMouseStrength;
   }
 
   vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-  
   vDepth = -mvPosition.z;
-
-  float finalSize = uSize;
-  // Audio increases particle size slightly
-  finalSize *= (1.0 + uAudioHigh * 0.5);
+  
+  // 4. Size calculation
+  // 边缘粒子逐渐变小消失
+  float sizeFade = smoothstep(maskRadius + 0.08, maskRadius, dist); 
+  
+  float finalSize = uSize * sizeFade;
+  finalSize *= (1.0 + uAudioHigh * 0.5); // Audio pump
 
   gl_PointSize = finalSize * (200.0 / -mvPosition.z);
   gl_Position = projectionMatrix * mvPosition;
@@ -205,6 +238,7 @@ uniform float uColorShiftSpeed;
 uniform float uTime;
 
 varying vec3 vColor;
+varying float vEdgeIntensity; // 接收边缘强度
 
 ${colorShift}
 
@@ -212,7 +246,11 @@ void main() {
   vec2 xy = gl_PointCoord.xy - vec2(0.5);
   float ll = length(xy);
   if(ll > 0.5) discard;
+  
+  // 边缘粒子稍微透明一点
   float alpha = smoothstep(0.5, 0.3, ll);
+  alpha *= (1.0 - vEdgeIntensity * 0.3); 
+
   vec3 finalColor = pow(vColor, vec3(uContrast));
   if (uColorShiftSpeed > 0.0) {
       finalColor = hueShift(finalColor, uTime * uColorShiftSpeed);

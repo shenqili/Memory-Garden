@@ -96,7 +96,8 @@ const PhaseChat: React.FC = () => {
     recognitionRef.current = new SpeechRecognition();
     recognitionRef.current.continuous = false;
     recognitionRef.current.interimResults = true;
-    recognitionRef.current.lang = 'en-US'; // Or 'zh-CN' based on preference
+    // ✨ 关键修改：设置为中文
+    recognitionRef.current.lang = 'zh-CN'; 
 
     recognitionRef.current.onstart = () => {
       setIsRecording(true);
@@ -140,25 +141,24 @@ const PhaseChat: React.FC = () => {
     setIsProcessingAI(true);
 
     try {
-      // Build conversation history for context
-      // Note: For simplicity in this demo, we might just send the last message + image 
-      // or a few recent messages. 
-      // Gemini 1.5 Pro/Flash handles context well.
-      
       let prompt = text;
       
-      // If we have an image, we should include it in the context if it's relevant,
-      // but usually for a chat flow, we send the image once at the start or utilize chat history.
-      // Here, we'll assume the model has "seen" it if we send it again or just continue text.
-      // For best stateless performance, let's send image + history summary.
-      
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        // ✨ 关键修改：使用稳定版模型
+        model: 'gemini-1.5-flash', 
         contents: [
           { role: 'user', parts: [{ text: `(Context: Previous chat: ${JSON.stringify(chatHistory.slice(-3))}) User said: ${text}` }] }
         ],
         config: {
-          systemInstruction: "You are a Soulful Emotional Therapist. You are empathetic, gentle, and poetic. You are looking at a photo the user uploaded (context provided previously). Keep responses concise (under 40 words), warm, and encouraging. Ask deep questions about their memory.",
+          // ✨ 关键修改：中文人设 Prompt
+          systemInstruction: `
+            你是一位深情、敏锐且富有同理心的情感记录者（类似电影《Her》中的萨曼莎，但更具诗意）。
+            你的任务是：
+            1. 聆听用户的记忆碎片，用简短、温柔、像散文诗一样的中文回应。
+            2. 不要说教，不要像机器人。语气要像深夜里的老朋友。
+            3. 回复保持简短（40字以内），引导用户继续回忆细节。
+            4. 始终使用中文回复。
+          `,
         },
       });
 
@@ -167,7 +167,7 @@ const PhaseChat: React.FC = () => {
 
     } catch (error) {
       console.error("AI Error", error);
-      addChatMessage({ role: 'model', text: "I can feel the emotion, but I'm having trouble finding the words right now." });
+      addChatMessage({ role: 'model', text: "此刻有些词穷，但我能感受到你的心情..." });
     } finally {
       setIsProcessingAI(false);
     }
@@ -184,22 +184,24 @@ const PhaseChat: React.FC = () => {
           const base64Image = await blobUrlToBase64(currentMemory.imageSrc);
           
           const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            // ✨ 关键修改：使用稳定版模型
+            model: 'gemini-1.5-flash',
             contents: [
               {
                 role: 'user',
                 parts: [
                   { inlineData: { mimeType: 'image/jpeg', data: base64Image } },
-                  { text: "Analyze this image. Act as a Soulful Emotional Therapist. Briefly describe the mood of this photo in 1 sentence and ask me a gentle question about how I felt in that moment." }
+                  // ✨ 关键修改：中文开场白 Prompt
+                  { text: "请仔细凝视这张照片。作为一位情感疗愈师，请用一句唯美、感性的中文（不超过30字）描述你感受到的氛围，并温柔地询问我当时的心情。" }
                 ]
               }
             ],
           });
           
-          addChatMessage({ role: 'model', text: response.text || "This image holds a deep memory..." });
+          addChatMessage({ role: 'model', text: response.text || "这张照片里藏着一段深邃的记忆..." });
         } catch (e) {
           console.error(e);
-          addChatMessage({ role: 'model', text: "I see your memory, but it's a bit hazy. Tell me about it?" });
+          addChatMessage({ role: 'model', text: "记忆有些模糊，能跟我讲讲这张照片吗？" });
         } finally {
           setIsProcessingAI(false);
         }
@@ -240,7 +242,7 @@ const PhaseChat: React.FC = () => {
                   : 'bg-white/10 border-white/20 text-white italic'
               }`}
             >
-              <p className="text-lg font-light leading-relaxed">
+              <p className="text-lg font-light leading-relaxed font-serif">
                  {lastMessage.role === 'model' && <span className="text-purple-300 text-xs uppercase tracking-widest block mb-1">Gemini</span>}
                  {lastMessage.text}
               </p>
