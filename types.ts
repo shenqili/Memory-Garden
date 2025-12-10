@@ -45,7 +45,7 @@ export interface ChatMessage {
 
 export interface Memory {
   id: string;
-  imageSrc: string;
+  images: string[]; // Changed from single imageSrc to array
   date: string;
   text: string;
   chatHistory?: ChatMessage[];

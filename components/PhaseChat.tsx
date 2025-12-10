@@ -145,7 +145,7 @@ const PhaseChat: React.FC = () => {
       
       const response = await ai.models.generateContent({
         // ✨ 关键修改：使用稳定版模型
-        model: 'gemini-1.5-flash', 
+        model: 'gemini-2.5-flash', 
         contents: [
           { role: 'user', parts: [{ text: `(Context: Previous chat: ${JSON.stringify(chatHistory.slice(-3))}) User said: ${text}` }] }
         ],
@@ -176,16 +176,16 @@ const PhaseChat: React.FC = () => {
   // Initial Image Analysis (The "Soulful" Start)
   useEffect(() => {
     const initChat = async () => {
-      if (currentMemory?.imageSrc && !hasInitializedChat.current && chatHistory.length === 0) {
+      if (currentMemory?.images?.[0] && !hasInitializedChat.current && chatHistory.length === 0) {
         hasInitializedChat.current = true;
         setIsProcessingAI(true);
         
         try {
-          const base64Image = await blobUrlToBase64(currentMemory.imageSrc);
+          const base64Image = await blobUrlToBase64(currentMemory.images[0]);
           
           const response = await ai.models.generateContent({
             // ✨ 关键修改：使用稳定版模型
-            model: 'gemini-1.5-flash',
+            model: 'gemini-2.5-flash',
             contents: [
               {
                 role: 'user',

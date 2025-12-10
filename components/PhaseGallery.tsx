@@ -7,6 +7,11 @@ const PhaseGallery: React.FC = () => {
   const currentMemory = useAppStore(state => state.currentMemory);
   const setCurrentMemory = useAppStore(state => state.setCurrentMemory);
   const setPhase = useAppStore(state => state.setPhase);
+  const phase = useAppStore(state => state.phase);
+
+  // In Memory Corridor mode (IDLE), we might not want to show the bottom bar, 
+  // or we show it differently. For now, we keep it but ensure types are correct.
+  if (phase === 'IDLE') return null; 
 
   return (
     <motion.div 
@@ -35,7 +40,7 @@ const PhaseGallery: React.FC = () => {
             onClick={() => setCurrentMemory(mem)}
             className={`relative flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border-2 transition-all ${currentMemory?.id === mem.id ? 'border-white scale-105' : 'border-transparent opacity-50 hover:opacity-80'}`}
           >
-            <img src={mem.imageSrc} alt={mem.date} className="w-full h-full object-cover" />
+            <img src={mem.images[0]} alt={mem.date} className="w-full h-full object-cover" />
           </button>
         ))}
       </div>
