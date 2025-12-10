@@ -6,29 +6,28 @@ import { particleVertexShader, particleFragmentShader } from '../utils/shaderUti
 import { ParticleData } from '../types';
 import { useAppStore } from '../store';
 
-interface ImageParticlesProps {
+// Extend props to allow 3D positioning
+interface ImageParticlesProps extends React.ComponentProps<'points'> {
   imageSrc: string;
+  isInteractive?: boolean;
 }
 
-const ImageParticles: React.FC<ImageParticlesProps> = ({ imageSrc }) => {
+const ImageParticles: React.FC<ImageParticlesProps> = ({ imageSrc, isInteractive = true, ...props }) => {
   const meshRef = useRef<THREE.Points>(null);
   const { camera } = useThree();
   const [particleData, setParticleData] = useState<ParticleData | null>(null);
   
-  // Ref to track the processed image URL to prevent reprocessing same image
   const loadedImageRef = useRef<string | null>(null);
-  // Ref for transition animation (Dispersion value)
   const dispersionTarget = useRef(0.1);
   const currentDispersion = useRef(0.1);
   const isTransitioning = useRef(false);
   const nextParticleData = useRef<ParticleData | null>(null);
 
-  // Subscribe to audio level from store
   const audioLevel = useAppStore(state => state.audioLevel);
-  // Use a ref for audio to avoid re-creating uniforms every frame
   const audioLevelRef = useRef(0);
   useEffect(() => { audioLevelRef.current = audioLevel; }, [audioLevel]);
 
+  // Use controls but allow override if needed? For now global.
   const controls = useControls('Gemini Particle Interface', {
     'Visual parameters': folder({
       particleSize: { value: 2.0, min: 0.1, max: 10.0 },
@@ -55,7 +54,7 @@ const ImageParticles: React.FC<ImageParticlesProps> = ({ imageSrc }) => {
       uSize: { value: controls.particleSize },
       uContrast: { value: controls.contrast },
       uColorShiftSpeed: { value: controls.colorShiftSpeed },
-      uDispersion: { value: 0.1 }, // Controlled by transition logic
+      uDispersion: { value: 0.1 },
       uFlowSpeed: { value: controls.flowSpeed },
       uFlowAmplitude: { value: controls.flowAmplitude },
       uDepthStrength: { value: controls.depthStrength },
@@ -67,7 +66,6 @@ const ImageParticles: React.FC<ImageParticlesProps> = ({ imageSrc }) => {
     []
   );
 
-  // Update uniforms that come from Leva
   useEffect(() => {
     if (meshRef.current) {
       const u = meshRef.current.material as THREE.ShaderMaterial;
@@ -83,7 +81,6 @@ const ImageParticles: React.FC<ImageParticlesProps> = ({ imageSrc }) => {
     }
   }, [controls]);
 
-  // Image Processing Logic
   const processImage = (src: string) => {
     const img = new Image();
     img.crossOrigin = "Anonymous";
@@ -91,7 +88,7 @@ const ImageParticles: React.FC<ImageParticlesProps> = ({ imageSrc }) => {
     
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const maxSize = 500; // 确保这里是 350
+      const maxSize = 350; 
       let width = img.width;
       let height = img.height;
       
@@ -110,11 +107,10 @@ const ImageParticles: React.FC<ImageParticlesProps> = ({ imageSrc }) => {
       const imgData = ctx.getImageData(0, 0, width, height);
       const data = imgData.data;
 
-      // 准备数组
       const positions: number[] = [];
       const colors: number[] = [];
       const initials: number[] = [];
-      const realUvs: number[] = []; // ✨ 1. 新增这个数组
+      const realUvs: number[] = [];
       
       const aspect = width / height;
       const sceneWidth = 16;
@@ -137,19 +133,16 @@ const ImageParticles: React.FC<ImageParticlesProps> = ({ imageSrc }) => {
             positions.push(posX, posY, 0);
             initials.push(posX, posY, 0);
             colors.push(r, g, b);
-            
-            // ✨ 2. 计算并存入 UV 坐标 (范围 0 到 1)
             realUvs.push(x / canvas.width, 1.0 - y / canvas.height); 
           }
         }
       }
 
-      // ✨ 3. 构造完整的数据对象（这里修复你的报错）
       const newData: ParticleData = {
         positions: new Float32Array(positions),
         colors: new Float32Array(colors),
         uvs: new Float32Array(initials), 
-        realUvs: new Float32Array(realUvs), // <--- 关键！加上这一行
+        realUvs: new Float32Array(realUvs),
         count: positions.length / 3,
         id: Math.random().toString(36).substr(2, 9)
       };
@@ -162,16 +155,14 @@ const ImageParticles: React.FC<ImageParticlesProps> = ({ imageSrc }) => {
       }
     };
   };
-  // Trigger processing on imageSrc change
+
   useEffect(() => {
     if (loadedImageRef.current !== imageSrc) {
       if (!particleData) {
-        // First load
         processImage(imageSrc);
       } else {
-        // Trigger Transition
         isTransitioning.current = true;
-        dispersionTarget.current = 4.0; // High dispersion for explosion effect
+        dispersionTarget.current = 4.0;
         loadedImageRef.current = imageSrc;
         processImage(imageSrc);
       }
@@ -188,33 +179,36 @@ const ImageParticles: React.FC<ImageParticlesProps> = ({ imageSrc }) => {
         0.1
       );
 
-      // Transition Logic
-      // 1. Lerp current dispersion to target
       currentDispersion.current = THREE.MathUtils.lerp(currentDispersion.current, dispersionTarget.current, delta * 3.0);
       material.uniforms.uDispersion.value = currentDispersion.current;
 
-      // 2. If dispersing and high enough, swap data
       if (isTransitioning.current && currentDispersion.current > 3.0 && nextParticleData.current) {
         setParticleData(nextParticleData.current);
         nextParticleData.current = null;
         isTransitioning.current = false;
-        dispersionTarget.current = 0.1; // Settle down
+        dispersionTarget.current = 0.1; 
       }
 
-      // Mouse
-      const vec = new THREE.Vector3(state.pointer.x, state.pointer.y, 0.5);
-      vec.unproject(camera);
-      const dir = vec.sub(camera.position).normalize();
-      const distance = -camera.position.z / dir.z;
-      const pos = camera.position.clone().add(dir.multiplyScalar(distance));
-      material.uniforms.uMouse.value.copy(pos);
+      if (isInteractive) {
+        // Raycasting for mouse interaction only if interactive
+        const vec = new THREE.Vector3(state.pointer.x, state.pointer.y, 0.5);
+        vec.unproject(camera);
+        const dir = vec.sub(camera.position).normalize();
+        const distance = -camera.position.z / dir.z;
+        const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+        // Transform mouse position to local space if mesh is transformed
+        meshRef.current.worldToLocal(pos);
+        material.uniforms.uMouse.value.copy(pos);
+      } else {
+         material.uniforms.uMouse.value.set(9999,9999,9999);
+      }
     }
   });
 
   if (!particleData) return null;
 
   return (
-    <points ref={meshRef} key={particleData.id}>
+    <points ref={meshRef} key={particleData.id} {...props}>
       <bufferGeometry>
         <bufferAttribute
           attach="attributes-position"

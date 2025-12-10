@@ -11,6 +11,9 @@ import { AnimatePresence } from 'framer-motion';
 import PhaseChat from './components/PhaseChat';
 import PhaseGallery from './components/PhaseGallery';
 
+// Scene Components
+import GalleryScene from './components/GalleryScene';
+
 // Post-processing imports
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -87,7 +90,7 @@ const UIOverlay = () => {
           </h1>
         </div>
         
-        {phase === 'IDLE' && (
+        {phase === 'GALLERY' && (
            <div className="pointer-events-auto bg-white/10 backdrop-blur-md border border-white/20 px-4 py-2 rounded-full cursor-pointer hover:bg-white/20 transition">
              <label className="cursor-pointer text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
                <span>+ Upload Memory</span>
@@ -100,7 +103,11 @@ const UIOverlay = () => {
       {/* Dynamic Phase Content */}
       <AnimatePresence mode='wait'>
         {phase === 'CHATTING' && <PhaseChat key="chat" />}
-        {(phase === 'GALLERY' || phase === 'IDLE') && <PhaseGallery key="gallery" />}
+        {phase === 'GALLERY' && (
+          <div className="absolute bottom-10 left-0 w-full text-center pointer-events-none">
+             <p className="text-white/30 text-xs tracking-[0.3em] uppercase">Move mouse to explore • Click to remember</p>
+          </div>
+        )}
       </AnimatePresence>
     </>
   );
@@ -108,32 +115,31 @@ const UIOverlay = () => {
 
 const App: React.FC = () => {
   const currentMemory = useAppStore(state => state.currentMemory);
-  const memories = useAppStore(state => state.memories);
-  const loadMemory = useAppStore(state => state.loadMemory);
-
-  // Load first memory on mount
-  useEffect(() => {
-    if (memories.length > 0 && !currentMemory) {
-      loadMemory(memories[0].id);
-    }
-  }, []);
+  const isGalleryMode = useAppStore(state => state.isGalleryMode);
 
   return (
     <div className="relative w-full h-screen bg-black overflow-hidden font-sans">
       <div className="absolute inset-0 z-0">
         <Canvas camera={{ position: [0, 0, 10], fov: 60 }}>
           <color attach="background" args={['#000000']} />
-          {currentMemory && <ImageParticles imageSrc={currentMemory.imageSrc} />}
+          
+          {isGalleryMode ? (
+             <GalleryScene />
+          ) : (
+             currentMemory && <ImageParticles imageSrc={currentMemory.imageSrc} />
+          )}
+
           <Effects />
-          <OrbitControls 
-            enableZoom={true} 
-            enablePan={false} 
-            enableRotate={true}
-            maxDistance={20}
-            minDistance={4}
-            maxPolarAngle={Math.PI / 1.5}
-            minPolarAngle={Math.PI / 3}
-          />
+          
+          {!isGalleryMode && (
+             <OrbitControls 
+               enableZoom={true} 
+               enablePan={false} 
+               enableRotate={true}
+               maxDistance={20}
+               minDistance={4}
+             />
+          )}
         </Canvas>
       </div>
 
@@ -143,7 +149,7 @@ const App: React.FC = () => {
         theme={{
           colors: { accent: '#ffffff', bg: '#1a1a1a', textColor: '#f0f0f0', labelColor: '#888' },
         }}
-        collapsed={true} // Hide by default for production feel
+        collapsed={true} 
       />
     </div>
   );

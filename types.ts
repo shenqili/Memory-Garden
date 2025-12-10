@@ -3,8 +3,8 @@ import * as THREE from 'three';
 export interface ParticleData {
   positions: Float32Array;
   colors: Float32Array;
-  uvs: Float32Array; // 这里存储的是初始的 3D 位置 (xyz)
-  realUvs: Float32Array; // ✨ 新增：这里存储真正的纹理坐标 (uv)
+  uvs: Float32Array;
+  realUvs: Float32Array;
   count: number;
   id?: string;
 }
@@ -50,4 +50,8 @@ export interface Memory {
   text: string;
   chatHistory?: ChatMessage[];
   audioUrl?: string;
+  // 3D Scene Properties
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  scale?: [number, number, number];
 }
