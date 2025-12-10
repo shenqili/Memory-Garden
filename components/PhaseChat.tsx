@@ -54,7 +54,7 @@ const PhaseChat: React.FC = () => {
     try {
       if (!audioContextRef.current) {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
         analyserRef.current = audioContextRef.current.createAnalyser();
         analyserRef.current.fftSize = 256;
         sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
@@ -96,7 +96,7 @@ const PhaseChat: React.FC = () => {
     recognitionRef.current = new SpeechRecognition();
     recognitionRef.current.continuous = false;
     recognitionRef.current.interimResults = true;
-    // Set to Chinese
+    // ✨ 关键修改：设置为中文
     recognitionRef.current.lang = 'zh-CN'; 
 
     recognitionRef.current.onstart = () => {
@@ -141,13 +141,16 @@ const PhaseChat: React.FC = () => {
     setIsProcessingAI(true);
 
     try {
+      let prompt = text;
+      
       const response = await ai.models.generateContent({
-        // Fixed Model Name
-        model: 'gemini-2.5-flash', 
+        // ✨ 关键修改：使用稳定版模型
+        model: 'gemini-1.5-flash', 
         contents: [
           { role: 'user', parts: [{ text: `(Context: Previous chat: ${JSON.stringify(chatHistory.slice(-3))}) User said: ${text}` }] }
         ],
         config: {
+          // ✨ 关键修改：中文人设 Prompt
           systemInstruction: `
             你是一位深情、敏锐且富有同理心的情感记录者（类似电影《Her》中的萨曼莎，但更具诗意）。
             你的任务是：
@@ -181,13 +184,14 @@ const PhaseChat: React.FC = () => {
           const base64Image = await blobUrlToBase64(currentMemory.imageSrc);
           
           const response = await ai.models.generateContent({
-            // Fixed Model Name
-            model: 'gemini-2.5-flash',
+            // ✨ 关键修改：使用稳定版模型
+            model: 'gemini-1.5-flash',
             contents: [
               {
                 role: 'user',
                 parts: [
                   { inlineData: { mimeType: 'image/jpeg', data: base64Image } },
+                  // ✨ 关键修改：中文开场白 Prompt
                   { text: "请仔细凝视这张照片。作为一位情感疗愈师，请用一句唯美、感性的中文（不超过30字）描述你感受到的氛围，并温柔地询问我当时的心情。" }
                 ]
               }
