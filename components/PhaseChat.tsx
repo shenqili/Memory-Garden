@@ -176,12 +176,12 @@ const PhaseChat: React.FC = () => {
   // Initial Image Analysis (The "Soulful" Start)
   useEffect(() => {
     const initChat = async () => {
-      if (currentMemory?.images?.[0] && !hasInitializedChat.current && chatHistory.length === 0) {
+      if (currentMemory?.imageSrc && !hasInitializedChat.current && chatHistory.length === 0) {
         hasInitializedChat.current = true;
         setIsProcessingAI(true);
         
         try {
-          const base64Image = await blobUrlToBase64(currentMemory.images[0]);
+          const base64Image = await blobUrlToBase64(currentMemory.imageSrc);
           
           const response = await ai.models.generateContent({
             // ✨ 关键修改：使用稳定版模型

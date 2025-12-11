@@ -2,7 +2,6 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import ImageParticles from './components/ImageParticles';
-import MemoryCorridor from './components/MemoryCorridor';
 import { Leva } from 'leva';
 import * as THREE from 'three';
 import { useAppStore } from './store';
@@ -61,6 +60,7 @@ const UIOverlay = () => {
   const phase = useAppStore(state => state.phase);
   const setPhase = useAppStore(state => state.setPhase);
   const setCurrentMemory = useAppStore(state => state.setCurrentMemory);
+  const loadMemory = useAppStore(state => state.loadMemory);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -69,7 +69,7 @@ const UIOverlay = () => {
       // Create a temporary memory for the session
       setCurrentMemory({
         id: 'temp',
-        images: [url], // New array structure
+        imageSrc: url,
         date: new Date().toLocaleDateString(),
         text: ''
       });
@@ -82,8 +82,8 @@ const UIOverlay = () => {
       {/* Header */}
       <div className="absolute top-0 left-0 p-6 z-50 w-full pointer-events-none flex justify-between">
         <div>
-          <h1 className="text-2xl font-light text-white tracking-widest uppercase opacity-90 drop-shadow-md cursor-pointer" onClick={() => setPhase('IDLE')}>
-            MIAOMIAO GUO's MEMORY CORRIDOR
+          <h1 className="text-2xl font-light text-white tracking-widest uppercase opacity-90 drop-shadow-md">
+            MIAOMIAO GUO's AI GARDEN
           </h1>
         </div>
         
@@ -108,34 +108,32 @@ const UIOverlay = () => {
 
 const App: React.FC = () => {
   const currentMemory = useAppStore(state => state.currentMemory);
-  const phase = useAppStore(state => state.phase);
+  const memories = useAppStore(state => state.memories);
+  const loadMemory = useAppStore(state => state.loadMemory);
+
+  // Load first memory on mount
+  useEffect(() => {
+    if (memories.length > 0 && !currentMemory) {
+      loadMemory(memories[0].id);
+    }
+  }, []);
 
   return (
     <div className="relative w-full h-screen bg-black overflow-hidden font-sans">
       <div className="absolute inset-0 z-0">
         <Canvas camera={{ position: [0, 0, 10], fov: 60 }}>
-          <color attach="background" args={['#050505']} />
-          <fog attach="fog" args={['#000000', 5, 25]} /> {/* Atmospheric fog */}
-          
-          {phase === 'IDLE' ? (
-             <MemoryCorridor />
-          ) : (
-             currentMemory && <ImageParticles quality="high" imageSrc={currentMemory.images[0]} />
-          )}
-
+          <color attach="background" args={['#000000']} />
+          {currentMemory && <ImageParticles imageSrc={currentMemory.imageSrc} />}
           <Effects />
-          
-          {phase !== 'IDLE' && (
-             <OrbitControls 
-                enableZoom={true} 
-                enablePan={false} 
-                enableRotate={true}
-                maxDistance={20}
-                minDistance={4}
-                maxPolarAngle={Math.PI / 1.5}
-                minPolarAngle={Math.PI / 3}
-             />
-          )}
+          <OrbitControls 
+            enableZoom={true} 
+            enablePan={false} 
+            enableRotate={true}
+            maxDistance={20}
+            minDistance={4}
+            maxPolarAngle={Math.PI / 1.5}
+            minPolarAngle={Math.PI / 3}
+          />
         </Canvas>
       </div>
 

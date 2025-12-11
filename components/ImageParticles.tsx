@@ -8,17 +8,9 @@ import { useAppStore } from '../store';
 
 interface ImageParticlesProps {
   imageSrc: string;
-  quality?: 'low' | 'high';
-  scale?: number;
-  onClick?: () => void;
 }
 
-const ImageParticles: React.FC<ImageParticlesProps> = ({ 
-  imageSrc, 
-  quality = 'high', 
-  scale = 1.0, 
-  onClick 
-}) => {
+const ImageParticles: React.FC<ImageParticlesProps> = ({ imageSrc }) => {
   const meshRef = useRef<THREE.Points>(null);
   const { camera } = useThree();
   const [particleData, setParticleData] = useState<ParticleData | null>(null);
@@ -99,10 +91,7 @@ const ImageParticles: React.FC<ImageParticlesProps> = ({
     
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      
-      // ✨ Performance Optimization: Reduce size for gallery previews
-      const maxSize = quality === 'low' ? 120 : 350;
-
+      const maxSize = 500; // 确保这里是 350
       let width = img.width;
       let height = img.height;
       
@@ -121,11 +110,11 @@ const ImageParticles: React.FC<ImageParticlesProps> = ({
       const imgData = ctx.getImageData(0, 0, width, height);
       const data = imgData.data;
 
-      // Prepare Arrays
+      // 准备数组
       const positions: number[] = [];
       const colors: number[] = [];
       const initials: number[] = [];
-      const realUvs: number[] = [];
+      const realUvs: number[] = []; // ✨ 1. 新增这个数组
       
       const aspect = width / height;
       const sceneWidth = 16;
@@ -149,16 +138,18 @@ const ImageParticles: React.FC<ImageParticlesProps> = ({
             initials.push(posX, posY, 0);
             colors.push(r, g, b);
             
+            // ✨ 2. 计算并存入 UV 坐标 (范围 0 到 1)
             realUvs.push(x / canvas.width, 1.0 - y / canvas.height); 
           }
         }
       }
 
+      // ✨ 3. 构造完整的数据对象（这里修复你的报错）
       const newData: ParticleData = {
         positions: new Float32Array(positions),
         colors: new Float32Array(colors),
         uvs: new Float32Array(initials), 
-        realUvs: new Float32Array(realUvs),
+        realUvs: new Float32Array(realUvs), // <--- 关键！加上这一行
         count: positions.length / 3,
         id: Math.random().toString(36).substr(2, 9)
       };
@@ -185,7 +176,7 @@ const ImageParticles: React.FC<ImageParticlesProps> = ({
         processImage(imageSrc);
       }
     }
-  }, [imageSrc, quality]); // Re-process if quality changes
+  }, [imageSrc]);
 
   useFrame((state, delta) => {
     if (meshRef.current) {
@@ -223,14 +214,7 @@ const ImageParticles: React.FC<ImageParticlesProps> = ({
   if (!particleData) return null;
 
   return (
-    <points 
-      ref={meshRef} 
-      key={particleData.id} 
-      scale={[scale, scale, scale]} 
-      onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
-      onPointerOver={() => { document.body.style.cursor = onClick ? 'pointer' : 'auto' }}
-      onPointerOut={() => { document.body.style.cursor = 'auto' }}
-    >
+    <points ref={meshRef} key={particleData.id}>
       <bufferGeometry>
         <bufferAttribute
           attach="attributes-position"
