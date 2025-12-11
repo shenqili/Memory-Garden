@@ -3,8 +3,8 @@ import * as THREE from 'three';
 export interface ParticleData {
   positions: Float32Array;
   colors: Float32Array;
-  uvs: Float32Array; // 这里存储的是初始的 3D 位置 (xyz)
-  realUvs: Float32Array; // ✨ 新增：这里存储真正的纹理坐标 (uv)
+  uvs: Float32Array; // Initial 3D positions
+  realUvs: Float32Array; // Texture coordinates
   count: number;
   id?: string;
 }
@@ -37,17 +37,25 @@ export interface Uniforms {
 }
 
 export type AppPhase = 'IDLE' | 'CHATTING' | 'GENERATING' | 'GALLERY';
+export type ViewMode = 'CORRIDOR' | 'GARDEN';
 
 export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
 }
 
-export interface Memory {
+export interface MemoryFragment {
   id: string;
   imageSrc: string;
-  date: string;
   text: string;
-  chatHistory?: ChatMessage[];
+}
+
+export interface MemoryCapsule {
+  id: string;
+  date: string;
+  title: string;
+  coverImage: string;
   audioUrl?: string;
+  fragments: MemoryFragment[];
+  chatHistory?: ChatMessage[];
 }
