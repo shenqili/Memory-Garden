@@ -92,7 +92,7 @@ const ImageParticles: React.FC<ImageParticlesProps> = ({ imageSrc }) => {
     
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const maxSize = 350; // Optimized size
+      const maxSize = 500; // Optimized size
       let width = img.width;
       let height = img.height;
       

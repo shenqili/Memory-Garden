@@ -1,3 +1,4 @@
+
 // Simplex 3D Noise function (standard implementation)
 const simplexNoise = `
 vec4 permute(vec4 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
@@ -126,12 +127,11 @@ uniform float uAudioHigh; // Audio Reactivity
 
 attribute vec3 color;
 attribute vec3 initialPosition;
-// ✨ 新增: Shader 自动获取 UV
 varying vec2 vUv; 
 
 varying vec3 vColor;
 varying float vDepth;
-varying float vEdgeIntensity; // 传递边缘强度给 fragment shader
+varying float vEdgeIntensity; 
 
 ${curlNoise}
 
@@ -141,56 +141,36 @@ float luminance(vec3 rgb) {
 
 void main() {
   vUv = uv;
-  
-  // --- 1. Organic Masking Logic (记忆碎片边缘) ---
   vec2 center = vec2(0.5);
   float dist = distance(uv, center);
   
-  // 使用 Noise 生成动态的、不规则的边缘
   float edgeNoise = snoise(vec3(uv * 3.5, uTime * 0.15)) * 0.15;
-  // 基础半径 + 噪点偏移 = 不规则轮廓
   float maskRadius = 0.38 + edgeNoise;
   
-  // 计算裁剪遮罩 (Alpha Mask)
-  // smoothstep 0.08 用于创建柔和的边缘过渡
   float alphaMask = 1.0 - smoothstep(maskRadius, maskRadius + 0.08, dist);
   
-  // 如果完全被遮挡，移出屏幕
   if (alphaMask < 0.01) {
     gl_Position = vec4(10.0, 10.0, 10.0, 1.0); 
     return;
   }
 
-  // --- 2. Color Processing (边缘发光) ---
-  // 计算发光强度：越靠近边缘越强
   float edgeGlow = smoothstep(maskRadius, maskRadius + 0.08, dist);
   vEdgeIntensity = edgeGlow; 
 
-  // 边缘处混合白色 (Whitewash effect)
-  // 0.7 是混合强度，越靠近边缘，粒子越接近纯白
   vec3 finalColor = mix(color, vec3(1.0, 1.0, 1.0), edgeGlow * 0.7);
   vColor = finalColor;
 
-  // --- 3. Position & Physics ---
   vec3 pos = initialPosition;
   float lum = luminance(finalColor);
 
-  // Z-Depth Relief
   pos.z += lum * uDepthStrength;
-
-  // Depth Wave
   pos.z += sin(pos.x * 0.5 + uTime * 0.5) * uDepthWave;
-
-  // Audio Reactivity (BOOM effect)
   pos.z += uAudioHigh * lum * 3.0;
   
-  // Dispersion (Transition)
   float staticNoise = snoise(pos * 5.0 + uTime * 0.1);
   vec3 scatterDir = vec3(staticNoise, snoise(pos * 5.5), snoise(pos * 6.0));
   pos += scatterDir * uDispersion;
 
-  // Curl Noise Flow
-  // 边缘粒子更不稳定，更容易飘动
   float edgeInstability = 1.0 + edgeGlow * 2.5; 
   
   float flowTime = uTime * uFlowSpeed;
@@ -198,7 +178,6 @@ void main() {
   vec3 curlVel = curl(noisePos.x, noisePos.y, noisePos.z);
   pos += curlVel * (uFlowAmplitude * edgeInstability + uAudioHigh * 0.5);
 
-  // Mouse Repulsion
   float mouseDist = distance(pos.xy, uMouse.xy);
   if(mouseDist < uHoverRadius) {
     vec3 dir = normalize(pos - vec3(uMouse.xy, pos.z));
@@ -211,19 +190,16 @@ void main() {
   vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
   vDepth = -mvPosition.z;
   
-  // 4. Size calculation
-  // 边缘粒子逐渐变小消失
   float sizeFade = smoothstep(maskRadius + 0.08, maskRadius, dist); 
   
   float finalSize = uSize * sizeFade;
-  finalSize *= (1.0 + uAudioHigh * 0.5); // Audio pump
+  finalSize *= (1.0 + uAudioHigh * 0.5);
 
   gl_PointSize = finalSize * (200.0 / -mvPosition.z);
   gl_Position = projectionMatrix * mvPosition;
 }
 `;
 
-// Color shift helper
 const colorShift = `
 vec3 hueShift(vec3 color, float hue) {
     const vec3 k = vec3(0.57735, 0.57735, 0.57735);
@@ -238,7 +214,7 @@ uniform float uColorShiftSpeed;
 uniform float uTime;
 
 varying vec3 vColor;
-varying float vEdgeIntensity; // 接收边缘强度
+varying float vEdgeIntensity; 
 
 ${colorShift}
 
@@ -247,7 +223,6 @@ void main() {
   float ll = length(xy);
   if(ll > 0.5) discard;
   
-  // 边缘粒子稍微透明一点
   float alpha = smoothstep(0.5, 0.3, ll);
   alpha *= (1.0 - vEdgeIntensity * 0.3); 
 
@@ -256,5 +231,123 @@ void main() {
       finalColor = hueShift(finalColor, uTime * uColorShiftSpeed);
   }
   gl_FragColor = vec4(finalColor, alpha);
+}
+`;
+
+// ============================================
+// FOREST BACKGROUND SHADER
+// ============================================
+
+export const forestVertexShader = `
+uniform float uTime;
+uniform sampler2D uTexture;
+attribute vec3 initialPosition; // Grid position
+attribute vec2 aUv;
+varying vec3 vWorldPos;
+varying vec3 vColor;
+
+void main() {
+  vec3 pos = initialPosition;
+  
+  // Sample image for color and height
+  vec4 tex = texture2D(uTexture, aUv);
+  float lum = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
+  
+  // Displace Z based on luminance (Relief mapping)
+  pos.z += lum * 3.0; 
+  
+  // Slight wind movement
+  pos.x += sin(pos.y * 0.5 + uTime * 0.2) * 0.1;
+
+  vec4 worldPos = modelMatrix * vec4(pos, 1.0);
+  vWorldPos = worldPos.xyz;
+  vColor = tex.rgb;
+
+  vec4 mvPosition = viewMatrix * worldPos;
+  gl_PointSize = 3.0 * (30.0 / -mvPosition.z);
+  gl_Position = projectionMatrix * mvPosition;
+}
+`;
+
+export const forestFragmentShader = `
+uniform vec3 uFireflies[10]; // Array of firefly positions
+uniform vec3 uMouse;
+uniform float uTime;
+varying vec3 vWorldPos;
+varying vec3 vColor;
+
+void main() {
+  vec2 xy = gl_PointCoord.xy - vec2(0.5);
+  if(length(xy) > 0.5) discard;
+
+  // Base ambient darkness
+  float light = 0.05;
+
+  // Add light from Fireflies
+  for(int i = 0; i < 10; i++) {
+    float dist = distance(vWorldPos, uFireflies[i]);
+    // Inverse square falloff with a cap
+    float intensity = 1.0 / (0.5 + dist * dist * 1.5);
+    light += intensity * 0.6; // Firefly strength
+  }
+  
+  // Add light from Mouse
+  // Assume mouse is projected to z=0 or similar depth for this simple 2D/3D interactions
+  // Or just use a simple radius check
+  float mouseDist = distance(vWorldPos.xy, uMouse.xy * 8.0); // Rough scaling
+  light += (1.0 - smoothstep(0.0, 4.0, mouseDist)) * 0.5;
+
+  vec3 finalColor = vColor * light;
+  
+  // Make particles fade in distance (fog-like)
+  float depth = gl_FragCoord.z / gl_FragCoord.w;
+  finalColor = mix(finalColor, vec3(0.01, 0.01, 0.02), smoothstep(5.0, 25.0, depth));
+
+  gl_FragColor = vec4(finalColor, 1.0);
+}
+`;
+
+// ============================================
+// MEMORY SPHERE NODE SHADER
+// ============================================
+
+export const sphereVertexShader = `
+uniform float uTime;
+uniform float uPulseSpeed;
+attribute vec3 color;
+varying vec3 vColor;
+
+void main() {
+  vColor = color;
+  vec3 pos = position;
+  
+  // Breathing animation
+  float pulse = 1.0 + sin(uTime * uPulseSpeed) * 0.05;
+  pos *= pulse;
+
+  // Rotate slowly
+  float c = cos(uTime * 0.1);
+  float s = sin(uTime * 0.1);
+  mat2 rot = mat2(c, -s, s, c);
+  pos.xz = rot * pos.xz;
+
+  vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+  gl_PointSize = 2.5 * (10.0 / -mvPosition.z);
+  gl_Position = projectionMatrix * mvPosition;
+}
+`;
+
+export const sphereFragmentShader = `
+varying vec3 vColor;
+void main() {
+  vec2 xy = gl_PointCoord.xy - vec2(0.5);
+  float d = length(xy);
+  if(d > 0.5) discard;
+
+  // Glowy center
+  float glow = 1.0 - smoothstep(0.0, 0.5, d);
+  glow = pow(glow, 2.0);
+
+  gl_FragColor = vec4(vColor * 1.5, glow); // Emissive boost
 }
 `;

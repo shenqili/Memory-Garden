@@ -1,4 +1,6 @@
+
 import * as THREE from 'three';
+import { ThreeElements } from '@react-three/fiber';
 
 export interface ParticleData {
   positions: Float32Array;
@@ -37,7 +39,7 @@ export interface Uniforms {
 }
 
 export type AppPhase = 'IDLE' | 'CHATTING' | 'GENERATING' | 'GALLERY';
-export type ViewMode = 'CORRIDOR' | 'GARDEN';
+export type ViewMode = 'FOREST' | 'GARDEN';
 
 export interface ChatMessage {
   role: 'user' | 'model';
@@ -58,4 +60,12 @@ export interface MemoryCapsule {
   audioUrl?: string;
   fragments: MemoryFragment[];
   chatHistory?: ChatMessage[];
+  position?: [number, number, number]; // Position in the 3D forest
+}
+
+// Fix for Property '...' does not exist on type 'JSX.IntrinsicElements'
+declare global {
+  namespace JSX {
+    interface IntrinsicElements extends ThreeElements {}
+  }
 }

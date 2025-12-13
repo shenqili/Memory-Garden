@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useAppStore } from '../store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GoogleGenAI } from "@google/genai";
@@ -30,7 +31,22 @@ const blobUrlToBase64 = async (url: string): Promise<string> => {
 const PhaseChat: React.FC = () => {
   const setAudioLevel = useAppStore(state => state.setAudioLevel);
   const setPhase = useAppStore(state => state.setPhase);
-  const currentMemory = useAppStore(state => state.currentMemory);
+  
+  // Fix: Retrieve correct state from store (currentCapsule instead of non-existent currentMemory)
+  const currentCapsule = useAppStore(state => state.currentCapsule);
+  const currentFragmentIndex = useAppStore(state => state.currentFragmentIndex);
+  
+  // Fix: Derive currentMemory object to match component expectations
+  const currentMemory = useMemo(() => {
+    if (!currentCapsule) return null;
+    const fragment = currentCapsule.fragments[currentFragmentIndex];
+    return {
+      ...currentCapsule,
+      text: fragment?.text || '',
+      imageSrc: fragment?.imageSrc || ''
+    };
+  }, [currentCapsule, currentFragmentIndex]);
+
   const chatHistory = useAppStore(state => state.chatHistory);
   const addChatMessage = useAppStore(state => state.addChatMessage);
   const isProcessingAI = useAppStore(state => state.isProcessingAI);
@@ -42,12 +58,14 @@ const PhaseChat: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const rafRef = useRef<number>();
+  // Fix: Initialize useRef with 0 to match expected arguments count in strict mode
+  const rafRef = useRef<number>(0);
   const recognitionRef = useRef<any>(null);
   const hasInitializedChat = useRef(false);
 
   // Initialize Gemini
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Fix: Use useMemo to prevent re-initialization on every render
+  const ai = useMemo(() => new GoogleGenAI({ apiKey: process.env.API_KEY }), []);
 
   // 1. Audio Visualization Logic (Particles)
   const startAudioViz = async () => {

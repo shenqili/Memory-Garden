@@ -1,9 +1,9 @@
 
 import React, { useState, useCallback, useEffect, useRef, Suspense } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, Loader } from '@react-three/drei';
+import { OrbitControls, Loader } from '@react-three/drei';
 import ImageParticles from './components/ImageParticles';
-import MirrorCorridor from './components/MirrorCorridor';
+import ParticleForest from './components/ParticleForest';
 import { Leva } from 'leva';
 import * as THREE from 'three';
 import { useAppStore } from './store';
@@ -29,14 +29,14 @@ const Effects: React.FC = () => {
     composer.addPass(renderPass);
 
     const afterimagePass = new AfterimagePass();
-    afterimagePass.uniforms['damp'].value = 0.7; 
+    afterimagePass.uniforms['damp'].value = 0.75; 
     composer.addPass(afterimagePass);
 
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(size.width, size.height), 
-      0.4, // Strength
-      0.5, // Radius
-      0.8  // Threshold
+      0.6, // Strength
+      0.6, // Radius
+      0.7  // Threshold
     );
     composer.addPass(bloomPass);
 
@@ -60,13 +60,51 @@ const Effects: React.FC = () => {
 // Controls the camera transition between modes
 const CameraManager = () => {
   const viewMode = useAppStore(state => state.viewMode);
-  const vec = new THREE.Vector3();
+  const isTransitioning = useAppStore(state => state.isVisualTransitioning);
+  const transitionTarget = useAppStore(state => state.transitionTarget);
+  const completeTransition = useAppStore(state => state.completeTransition);
+  
+  const cameraRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 8)); // Default forest position
+  
+  // Mouse parallax for Forest Mode
+  const { mouse } = useThree();
 
-  useFrame((state) => {
-    if (viewMode === 'CORRIDOR') {
-      state.camera.position.lerp(vec.set(0, 0, 6), 0.05);
-      state.camera.lookAt(0, 0, 0);
+  useFrame((state, delta) => {
+    const cam = state.camera;
+
+    if (isTransitioning && transitionTarget) {
+      // === ZOOM TRANSITION PHASE ===
+      // Fly towards the target node
+      const targetPos = transitionTarget.clone();
+      // Add small offset so we don't clip inside instantly, or do clip inside for effect
+      targetPos.z += 1.5; 
+      
+      cam.position.lerp(targetPos, delta * 2.5); // Smooth flight
+      
+      // Look at the target
+      const currentLookAt = new THREE.Vector3(0, 0, 0);
+      currentLookAt.lerp(transitionTarget, delta * 3.0);
+      cam.lookAt(currentLookAt);
+
+      // Check distance
+      if (cam.position.distanceTo(targetPos) < 0.5) {
+        completeTransition();
+        // Reset camera for Garden mode
+        cam.position.set(0, 0, 10);
+        cam.lookAt(0, 0, 0);
+      }
     } 
+    else if (viewMode === 'FOREST') {
+      // === FOREST IDLE PHASE ===
+      // Gentle parallax based on mouse
+      const parallaxX = mouse.x * 0.5;
+      const parallaxY = mouse.y * 0.5;
+      
+      const targetCamPos = new THREE.Vector3(parallaxX, parallaxY, 8);
+      cam.position.lerp(targetCamPos, delta);
+      cam.lookAt(0, 0, -5); // Look slightly into the distance
+    }
+    // Note: Garden mode is handled by OrbitControls in the main App component
   });
 
   return null;
@@ -76,7 +114,7 @@ const UIOverlay = () => {
   const viewMode = useAppStore(state => state.viewMode);
   const currentCapsule = useAppStore(state => state.currentCapsule);
   const currentFragmentIndex = useAppStore(state => state.currentFragmentIndex);
-  const exitMemory = useAppStore(state => state.exitMemory);
+  const triggerExitMemory = useAppStore(state => state.triggerExitMemory);
   const nextFragment = useAppStore(state => state.nextFragment);
   const prevFragment = useAppStore(state => state.prevFragment);
 
@@ -92,16 +130,16 @@ const UIOverlay = () => {
             Memory Garden
           </h1>
           <p className="text-xs text-white/50 tracking-[0.3em] mt-1">
-             {viewMode === 'CORRIDOR' ? 'Mirror Corridor' : currentCapsule?.title}
+             {viewMode === 'FOREST' ? 'Dark Forest' : currentCapsule?.title}
           </p>
         </div>
         
         {viewMode === 'GARDEN' && (
            <button 
-             onClick={exitMemory}
+             onClick={triggerExitMemory}
              className="pointer-events-auto bg-white/5 backdrop-blur-md border border-white/20 px-6 py-2 rounded-full cursor-pointer hover:bg-white/20 transition text-xs font-bold text-white uppercase tracking-wider"
            >
-             Return to Corridor
+             Return to Forest
            </button>
         )}
       </div>
@@ -150,32 +188,7 @@ const UIOverlay = () => {
           </>
         )}
       </AnimatePresence>
-
-      {/* Fade Transition Layer */}
-      <TransitionOverlay />
     </>
-  );
-};
-
-// Component to handle fade-to-black/white transition
-const TransitionOverlay = () => {
-  const viewMode = useAppStore(state => state.viewMode);
-  const [active, setActive] = useState(false);
-  const prevMode = useRef(viewMode);
-
-  useEffect(() => {
-    if (prevMode.current !== viewMode) {
-      setActive(true);
-      const timer = setTimeout(() => setActive(false), 1000); // Duration of fade
-      prevMode.current = viewMode;
-      return () => clearTimeout(timer);
-    }
-  }, [viewMode]);
-
-  return (
-    <div 
-      className={`absolute inset-0 z-[100] bg-black pointer-events-none transition-opacity duration-1000 ease-in-out ${active ? 'opacity-100' : 'opacity-0'}`}
-    />
   );
 };
 
@@ -193,14 +206,17 @@ const App: React.FC = () => {
     <div className="relative w-full h-screen bg-black overflow-hidden font-sans">
       <div className="absolute inset-0 z-0">
         <Canvas gl={{ antialias: false, alpha: false }}>
-          <color attach="background" args={['#050505']} />
+          <color attach="background" args={['#010101']} />
           
           <CameraManager />
 
           <Suspense fallback={null}>
-            {viewMode === 'CORRIDOR' && <MirrorCorridor />}
+            {/* Show Forest during IDLE and during TRANSITION */}
+            {(viewMode === 'FOREST' || useAppStore.getState().isVisualTransitioning) && (
+               <ParticleForest />
+            )}
             
-            {viewMode === 'GARDEN' && currentImage && (
+            {viewMode === 'GARDEN' && currentImage && !useAppStore.getState().isVisualTransitioning && (
               <>
                 <ImageParticles imageSrc={currentImage} />
                 <OrbitControls 
@@ -222,7 +238,7 @@ const App: React.FC = () => {
 
       <UIOverlay />
 
-      <Loader containerStyles={{ background: '#000' }} dataInterpolation={(p) => `Loading Memory... ${p.toFixed(0)}%`} />
+      <Loader containerStyles={{ background: '#000' }} dataInterpolation={(p) => `Loading Dreams... ${p.toFixed(0)}%`} />
 
       <Leva 
         theme={{
